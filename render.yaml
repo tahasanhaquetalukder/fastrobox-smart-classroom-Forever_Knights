@@ -4,6 +4,7 @@
 services:
   - type: web
     name: fastrobox-smart-classroom
+    region: singapore
     runtime: node
     rootDir: backend
     plan: free
@@ -29,6 +30,7 @@ services:
 
 databases:
   - name: fastrobox-db
+    region: singapore
     plan: free
     databaseName: fastrobox
     user: fastrobox
