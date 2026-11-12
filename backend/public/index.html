@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Classroom — Safety, Access &amp; Vision</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Smart Classroom</h1>
+      <span class="subtitle">Safety · Access · Vision</span>
+    </div>
+    <div class="meta">
+      <span class="room">Room: <strong id="roomId">—</strong></span>
+      <span class="conn"><span id="connDot" class="dot off"></span><span id="connText">connecting…</span></span>
+    </div>
+  </header>
+
+  <main>
+    <!-- Live status cards -->
+    <section class="cards">
+      <div class="card">
+        <div class="card-label">Temperature</div>
+        <div class="card-value"><span id="temp">—</span><span class="unit">°C</span></div>
+        <div class="card-sub">threshold <span id="tempTh">—</span>°C</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Humidity</div>
+        <div class="card-value"><span id="hum">—</span><span class="unit">%</span></div>
+        <div class="card-sub">threshold <span id="humTh">—</span>%</div>
+      </div>
+      <div class="card" id="flameCard">
+        <div class="card-label">Flame / Fire</div>
+        <div class="card-value"><span id="flame" class="badge ok">—</span></div>
+        <div class="card-sub">IR sensor</div>
+      </div>
+      <div class="card" id="doorCard">
+        <div class="card-label">Door (simulated)</div>
+        <div class="card-value"><span id="door" class="badge neutral">UNKNOWN</span></div>
+        <div class="card-sub">updated <span id="doorAt">—</span></div>
+      </div>
+    </section>
+
+    <!-- Door control -->
+    <section class="panel">
+      <h2>Remote door control</h2>
+      <div class="controls">
+        <button id="lockBtn" class="btn danger">Lock</button>
+        <button id="unlockBtn" class="btn success">Unlock</button>
+        <span id="doorCmd" class="hint"></span>
+      </div>
+      <div class="admin">
+        <label for="adminToken">Admin token</label>
+        <input id="adminToken" type="password" placeholder="only if ADMIN_TOKEN is set on server" autocomplete="off" />
+        <span class="hint">stored locally in your browser</span>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section class="panel">
+      <h2>Runtime settings</h2>
+      <form id="settingsForm" class="settings-grid">
+        <label>Room ID<input name="room_id" type="text" /></label>
+        <label>Temp threshold (°C)<input name="temp_threshold_c" type="number" step="0.1" /></label>
+        <label>Humidity threshold (%)<input name="humidity_threshold_pct" type="number" step="1" /></label>
+        <label>Flame response limit (ms)<input name="flame_response_limit_ms" type="number" step="1" /></label>
+        <label>Door auto-lock (ms)<input name="door_auto_lock_ms" type="number" step="1" /></label>
+        <div class="settings-actions">
+          <button type="submit" class="btn primary">Save settings</button>
+          <span id="settingsMsg" class="hint"></span>
+        </div>
+      </form>
+    </section>
+
+    <!-- Lists -->
+    <section class="lists">
+      <div class="panel">
+        <h2>Recent events</h2>
+        <ul id="events" class="list"></ul>
+      </div>
+      <div class="panel">
+        <h2>Attendance</h2>
+        <ul id="attendance" class="list"></ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">FastRobox 1.0 · Forever_Knights · Phase 1</footer>
+  <script src="/app.js"></script>
+</body>
+</html>
