@@ -1,6 +1,8 @@
+const path = require('path');
 const express = require('express');
 const config = require('./config');
 const db = require('./db');
+const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -15,7 +17,25 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// REST API routes, SSE stream and the static dashboard are mounted in Task 3.
+// Device-facing API (token auth).
+app.use('/api/device', require('./routes/device'));
+
+// Dashboard / operator API.
+app.use('/api/settings', require('./routes/settings'));
+app.use('/api/readings', require('./routes/readings'));
+app.use('/api/events', require('./routes/events'));
+app.use('/api/attendance', require('./routes/attendance'));
+app.use('/api/door', require('./routes/door'));
+app.use('/api/stream', require('./routes/stream'));
+
+// Extension point for later phases/levels.
+app.use('/api/features', require('./features'));
+
+// Static dashboard (public/index.html, app.js, styles.css).
+app.use(express.static(path.join(__dirname, '../public')));
+
+app.use(notFound);
+app.use(errorHandler);
 
 if (require.main === module) {
   app.listen(config.port, () => {
