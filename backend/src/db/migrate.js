@@ -1,9 +1,11 @@
 const fs = require('fs');
 const path = require('path');
 const db = require('../db');
+const config = require('../config');
 const settings = require('../services/settingsService');
 
 async function run() {
+  console.log(`[migrate] host=${config.dbHost || '(unknown)'} ssl=${config.dbSsl ? 'on' : 'off'}`);
   await db.query(
     `CREATE TABLE IF NOT EXISTS schema_migrations (
        name TEXT PRIMARY KEY,
@@ -40,7 +42,8 @@ async function run() {
 run()
   .then(() => db.pool.end())
   .catch((err) => {
-    console.error('[migrate] failed:', err.message);
+    console.error(`[migrate] failed: code=${err.code || 'n/a'} message=${config.redact(err.message)}`);
+    console.error('[migrate] hint: check SSL (DATABASE_SSL), URL host/port, network/firewall (port 5432), and that the Render DB is awake. Run `npm run db:check` to probe connectivity.');
     process.exitCode = 1;
     db.pool.end();
   });

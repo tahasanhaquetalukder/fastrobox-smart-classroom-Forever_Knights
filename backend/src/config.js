@@ -5,17 +5,62 @@ const dotenv = require('dotenv');
 // are already present and dotenv does not override existing process.env.
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
+const databaseUrl = process.env.DATABASE_URL || '';
+
+// Hostname only — safe to log. The full URL embeds credentials, so never log it.
+function hostOf(url) {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
+}
+
+function isLocalHost(host) {
+  return !host || host === 'localhost' || host === '127.0.0.1' || host === '::1';
+}
+
+// SSL policy: DATABASE_SSL=true/false forces it; otherwise auto-enable for any
+// non-local host. Render's External URL requires SSL — a plaintext socket there
+// is reset by the server (read ECONNRESET). rejectUnauthorized:false accepts
+// Render's managed certificate for the demo.
+function resolveSsl(url) {
+  const override = String(process.env.DATABASE_SSL || '').trim().toLowerCase();
+  if (['true', '1', 'yes'].includes(override)) return { rejectUnauthorized: false };
+  if (['false', '0', 'no'].includes(override)) return false;
+  const host = hostOf(url);
+  return host && !isLocalHost(host) ? { rejectUnauthorized: false } : false;
+}
+
+// Strip credentials before printing error text: replace the full URL and the
+// password substring so secrets never reach logs.
+function redact(str) {
+  let out = String(str == null ? '' : str);
+  if (databaseUrl) {
+    out = out.split(databaseUrl).join('[redacted-url]');
+    try {
+      const pw = new URL(databaseUrl).password;
+      if (pw) out = out.split(pw).join('***');
+    } catch {
+      // URL not parseable; the full-string replacement above still protects it.
+    }
+  }
+  return out;
+}
+
 const config = {
   port: parseInt(process.env.PORT || '3000', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
-  databaseUrl: process.env.DATABASE_URL || '',
-  pgSsl: String(process.env.PGSSL || 'false').toLowerCase() === 'true',
+  databaseUrl,
+  dbHost: hostOf(databaseUrl),
+  dbSsl: resolveSsl(databaseUrl),
   // Optional shared bootstrap token; per-device tokens live hashed in the DB.
   deviceToken: process.env.DEVICE_TOKEN || '',
   // Optional guard for mutating dashboard routes (settings/door).
   adminToken: process.env.ADMIN_TOKEN || '',
   // Seed only; runtime-editable via /api/settings.
   defaultRoomId: process.env.DEFAULT_ROOM_ID || 'ROOM-1',
+  redact,
 };
 
 module.exports = config;

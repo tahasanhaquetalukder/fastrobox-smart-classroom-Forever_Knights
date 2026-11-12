@@ -14,7 +14,7 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PGSSL
+      - key: DATABASE_SSL
         value: "false"
       - key: DATABASE_URL
         fromDatabase:

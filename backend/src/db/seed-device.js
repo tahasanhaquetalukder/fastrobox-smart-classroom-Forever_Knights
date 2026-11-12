@@ -36,7 +36,7 @@ async function run() {
 run()
   .then(() => db.pool.end())
   .catch((err) => {
-    console.error('[seed:device] failed:', err.message);
+    console.error(`[seed:device] failed: code=${err.code || 'n/a'} message=${config.redact(err.message)}`);
     process.exitCode = 1;
     db.pool.end();
   });
