@@ -17,6 +17,9 @@ yarn-error.log*
 *.log
 coverage/
 
+# --- Device simulator runtime spool (never commit) ---
+tools/simulator/spool.jsonl
+
 # --- PlatformIO / firmware build output ---
 .pio/
 firmware/.pio/

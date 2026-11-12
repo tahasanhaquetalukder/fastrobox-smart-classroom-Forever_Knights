@@ -36,6 +36,7 @@ pins).
 ```
 firmware/   PlatformIO + Arduino project for ESP32-S3-CAM
 backend/    Express REST API + SSE, PostgreSQL migrations, dashboard (public/)
+tools/      Device simulator (test the platform without hardware)
 docs/       architecture notes, pin map, level notes
 README.md  .gitignore  .env.example  render.yaml
 ```
@@ -114,6 +115,24 @@ room id, temp/humidity, flame state, door state, last RFID event and uptime.
 
 > Verify GPIOs in [`firmware/src/pins.h`](firmware/src/pins.h) against your board
 > before wiring — see [`docs/pin-map.md`](docs/pin-map.md).
+
+## Device simulator (no hardware needed)
+
+A zero-dependency Node script that mimics the ESP32 node against the **same
+backend API**: telemetry, student/teacher RFID scans, flame/over-temp alerts,
+command polling with ack, and an **offline spool with ordered resend**. It
+prints measured latency per event. Config is environment-only (no hard-coded
+secrets or UIDs).
+
+```bash
+# from tools/simulator, using a token from `npm run seed:device`
+SIM_BACKEND_URL=http://localhost:3000 SIM_DEVICE_TOKEN=<token> node index.js
+```
+
+Interactive keys: `o` offline · `r` reconnect+flush · `s`/`t` student/teacher
+scan · `f` flame · `h` over-temp · `q` quit. Flags: `--offline`, `--once`,
+`--seconds=N`. Full usage, env vars and the offline resend test:
+[`tools/simulator/README.md`](tools/simulator/README.md).
 
 ## Deploy to Render (public HTTPS)
 
