@@ -1,11 +1,11 @@
 const db = require('../db');
 const { publish } = require('./eventBus');
 
-async function create(deviceId, type, payload = {}) {
+async function create(deviceId, type, payload = {}, issuedBy = null) {
   const { rows } = await db.query(
-    `INSERT INTO commands (device_id, type, payload)
-     VALUES ($1, $2, $3::jsonb) RETURNING *`,
-    [deviceId, type, JSON.stringify(payload)]
+    `INSERT INTO commands (device_id, type, payload, issued_by)
+     VALUES ($1, $2, $3::jsonb, $4) RETURNING *`,
+    [deviceId, type, JSON.stringify(payload), issuedBy || null]
   );
   publish('command', rows[0]);
   return rows[0];
@@ -40,4 +40,4 @@ async function ack(deviceId, id, status = 'acked') {
   return rows[0] || null;
 }
 
-module.exports = { create, pendingFor, ack };
+module.exports = { ack, create, pendingFor };

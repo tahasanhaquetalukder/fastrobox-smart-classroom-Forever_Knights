@@ -20,6 +20,7 @@
 | RC522 RFID | MISO | 13 | ____ | SPI in |
 | RC522 RFID | RST | 9 | ____ | reset |
 | RGB LED (WS2812) | DIN | 48 | ____ | onboard; often GPIO48 on Freenove S3 |
+| Panic touch pad | TOUCH | 4 | ____ | capacitive pad via jumper wire; **must be a touch-capable GPIO free on your variant** |
 | BOOT button | — | 0 | 0 | fixed strapping pin; hold LOW at reset |
 
 ## Power wiring
@@ -54,4 +55,6 @@ if the reading is inverted, set `FLAME_ACTIVE_LOW 0`.
 - [ ] RC522 powered from **3V3**, not 5V.
 - [ ] Verified flame DO polarity.
 - [ ] Verified RGB LED pin (lit during boot).
+- [ ] Verified the panic pad GPIO is touch-capable, not used by the camera/flash,
+      and calibrated (`touch` task prints the baseline on Serial).
 - [ ] No peripheral pin conflicts with the camera block (for later phases).

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Smart Classroom - Local Status</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <div id="banner" hidden>FIRE &ndash; EVACUATE</div>
+
+  <header>
+    <div>
+      <h1>Smart Classroom &mdash; Local Status</h1>
+      <p id="conn" class="sub">connecting&hellip;</p>
+    </div>
+    <div id="clock" class="clock">--:--:--</div>
+  </header>
+
+  <section class="grid">
+    <div class="card"><div class="k">Room</div><div class="v" id="room">--</div></div>
+    <div class="card"><div class="k">Overall status</div><div class="v"><span id="status" class="badge info">--</span></div></div>
+    <div class="card"><div class="k">Temperature</div><div class="v" id="temp">--</div></div>
+    <div class="card"><div class="k">Humidity</div><div class="v" id="rh">--</div></div>
+    <div class="card"><div class="k">Heat index</div><div class="v" id="hi">--</div></div>
+    <div class="card"><div class="k">Heat trend</div><div class="v" id="trend">--</div></div>
+    <div class="card"><div class="k">Flame sensor</div><div class="v"><span id="flame" class="badge ok">--</span></div></div>
+    <div class="card"><div class="k">Door</div><div class="v"><span id="door" class="badge info">--</span></div></div>
+    <div class="card"><div class="k">Last card UID</div><div class="v" id="card">none</div></div>
+    <div class="card"><div class="k">Wi-Fi signal</div><div class="v" id="rssi">--</div></div>
+    <div class="card"><div class="k">Chip temperature</div><div class="v" id="chip">--</div></div>
+    <div class="card"><div class="k">Firmware</div><div class="v" id="fw">--</div></div>
+    <div class="card"><div class="k">IP address</div><div class="v" id="ip">--</div></div>
+    <div class="card"><div class="k">mDNS name</div><div class="v" id="host">--</div></div>
+    <div class="card"><div class="k">Device ID</div><div class="v" id="devid">--</div></div>
+    <div class="card"><div class="k">Uptime</div><div class="v" id="uptime">--</div></div>
+  </section>
+
+  <footer id="foot">--</footer>
+  <script src="/app.js"></script>
+</body>
+</html>

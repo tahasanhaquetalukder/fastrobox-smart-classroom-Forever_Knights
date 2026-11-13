@@ -3,91 +3,522 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart Classroom — Safety, Access &amp; Vision</title>
+  <meta name="description" content="FastRobox Smart Classroom — live safety, access and attendance dashboard" />
+  <title>Smart Classroom — Safety, Access &amp; Attendance</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <h1>Smart Classroom</h1>
-      <span class="subtitle">Safety · Access · Vision</span>
-    </div>
-    <div class="meta">
-      <span class="room">Room: <strong id="roomId">—</strong></span>
-      <span class="conn"><span id="connDot" class="dot off"></span><span id="connText">connecting…</span></span>
-    </div>
-  </header>
-
-  <main>
-    <!-- Live status cards -->
-    <section class="cards">
-      <div class="card">
-        <div class="card-label">Temperature</div>
-        <div class="card-value"><span id="temp">—</span><span class="unit">°C</span></div>
-        <div class="card-sub">threshold <span id="tempTh">—</span>°C</div>
-      </div>
-      <div class="card">
-        <div class="card-label">Humidity</div>
-        <div class="card-value"><span id="hum">—</span><span class="unit">%</span></div>
-        <div class="card-sub">threshold <span id="humTh">—</span>%</div>
-      </div>
-      <div class="card" id="flameCard">
-        <div class="card-label">Flame / Fire</div>
-        <div class="card-value"><span id="flame" class="badge ok">—</span></div>
-        <div class="card-sub">IR sensor</div>
-      </div>
-      <div class="card" id="doorCard">
-        <div class="card-label">Door (simulated)</div>
-        <div class="card-value"><span id="door" class="badge neutral">UNKNOWN</span></div>
-        <div class="card-sub">updated <span id="doorAt">—</span></div>
-      </div>
-    </section>
-
-    <!-- Door control -->
-    <section class="panel">
-      <h2>Remote door control</h2>
-      <div class="controls">
-        <button id="lockBtn" class="btn danger">Lock</button>
-        <button id="unlockBtn" class="btn success">Unlock</button>
-        <span id="doorCmd" class="hint"></span>
-      </div>
-      <div class="admin">
-        <label for="adminToken">Admin token</label>
-        <input id="adminToken" type="password" placeholder="only if ADMIN_TOKEN is set on server" autocomplete="off" />
-        <span class="hint">stored locally in your browser</span>
-      </div>
-    </section>
-
-    <!-- Settings -->
-    <section class="panel">
-      <h2>Runtime settings</h2>
-      <form id="settingsForm" class="settings-grid">
-        <label>Room ID<input name="room_id" type="text" /></label>
-        <label>Temp threshold (°C)<input name="temp_threshold_c" type="number" step="0.1" /></label>
-        <label>Humidity threshold (%)<input name="humidity_threshold_pct" type="number" step="1" /></label>
-        <label>Flame response limit (ms)<input name="flame_response_limit_ms" type="number" step="1" /></label>
-        <label>Door auto-lock (ms)<input name="door_auto_lock_ms" type="number" step="1" /></label>
-        <div class="settings-actions">
-          <button type="submit" class="btn primary">Save settings</button>
-          <span id="settingsMsg" class="hint"></span>
+  <!-- ===================== Login ===================== -->
+  <section id="loginView" class="login-wrap">
+    <div class="login-card">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">SC</span>
+        <div>
+          <h1>Smart Classroom</h1>
+          <span class="subtitle" data-i18n="brand.subtitle">Safety · Access · Attendance</span>
         </div>
+      </div>
+      <p class="login-sub" data-i18n="login.subtitle">Sign in with your school account.</p>
+      <form id="loginForm" novalidate>
+        <label for="loginEmail" data-i18n="login.email">Email</label>
+        <input id="loginEmail" name="email" type="email" autocomplete="username" required />
+        <label for="loginPassword" data-i18n="login.password">Password</label>
+        <input id="loginPassword" name="password" type="password" autocomplete="current-password" required />
+        <button id="loginBtn" class="btn primary block" type="submit" data-i18n="login.submit">Sign in</button>
+        <div id="loginMsg" class="form-msg" role="alert"></div>
       </form>
-    </section>
-
-    <!-- Lists -->
-    <section class="lists">
-      <div class="panel">
-        <h2>Recent events</h2>
-        <ul id="events" class="list"></ul>
+      <div class="lang-row">
+        <button id="loginLangBtn" class="btn ghost small" type="button">বাংলা</button>
       </div>
-      <div class="panel">
-        <h2>Attendance</h2>
-        <ul id="attendance" class="list"></ul>
-      </div>
-    </section>
-  </main>
+      <p class="login-foot" data-i18n="login.foot">Accounts are managed by the school administrator.</p>
+    </div>
+  </section>
 
-  <footer class="footer">FastRobox 1.0 · Forever_Knights · Phase 1</footer>
-  <script src="/app.js"></script>
+  <!-- ===================== App shell ===================== -->
+  <div id="appView" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">SC</span>
+        <div>
+          <h1>Smart Classroom</h1>
+          <span class="subtitle" data-i18n="brand.subtitle">Safety · Access · Attendance</span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <label class="room-picker" id="roomPickerWrap" hidden>
+          <span data-i18n="header.room">Room</span>
+          <select id="roomSelect"></select>
+        </label>
+        <span class="conn" title="Live connection">
+          <span id="connDot" class="dot off" aria-hidden="true"></span>
+          <span id="connText" data-i18n="conn.connecting">connecting…</span>
+        </span>
+        <span id="clock" class="clock" aria-label="Current time"></span>
+        <button id="langBtn" class="btn ghost small" type="button" title="Switch language">বাংলা</button>
+        <div class="user-chip">
+          <span id="userName" class="user-name"></span>
+          <span id="userRole" class="user-role"></span>
+        </div>
+        <button id="logoutBtn" class="btn ghost small" type="button" data-i18n="header.logout">Sign out</button>
+      </div>
+    </header>
+
+    <div id="alertBanner" class="alert-banner" role="alert" aria-live="assertive" hidden>
+      <div class="alert-text">
+        <strong id="alertTitle"></strong>
+        <span id="alertDetail"></span>
+      </div>
+      <div class="alert-actions">
+        <button id="silenceBtn" class="btn warn small" type="button" data-i18n="fire.silence">Silence buzzer</button>
+        <button id="resetFireBtn" class="btn danger small" type="button" data-i18n="fire.reset">Reset fire</button>
+      </div>
+    </div>
+
+    <nav class="tabs" id="mainTabs" aria-label="Sections">
+      <button class="tab active" type="button" data-view="overview" data-i18n="nav.overview">Overview</button>
+      <button class="tab" type="button" data-view="attendance" data-i18n="nav.attendance">Attendance</button>
+      <button class="tab" type="button" data-view="events" data-i18n="nav.events">Event log</button>
+      <button class="tab" type="button" data-view="admin" id="adminTabBtn" data-i18n="nav.admin" hidden>Administration</button>
+      <button class="tab" type="button" data-view="student" id="studentTabBtn" data-i18n="nav.myAttendance" hidden>My attendance</button>
+      <button class="tab" type="button" data-view="guardian" id="guardianTabBtn" data-i18n="nav.myChildren" hidden>My children</button>
+    </nav>
+
+    <div id="loadingBar" class="loading-bar" hidden><span></span></div>
+    <div id="pageError" class="page-error" role="alert" hidden></div>
+
+    <main>
+      <!-- ============ Overview ============ -->
+      <section id="view-overview" class="view" aria-labelledby="ovTitle">
+        <div class="view-head">
+          <h2 id="ovTitle" data-i18n="overview.title">Room overview</h2>
+          <div class="view-head-right">
+            <span id="roomStatus" class="badge neutral">UNKNOWN</span>
+            <span id="deviceCounts" class="hint"></span>
+          </div>
+        </div>
+
+        <div class="cards">
+          <article class="card">
+            <div class="card-label" data-i18n="card.temperature">Temperature</div>
+            <div class="card-value"><span id="temp">—</span><span class="unit">°C</span></div>
+            <div class="card-sub"><span data-i18n="card.threshold">threshold</span> <span id="tempTh">—</span>°C</div>
+          </article>
+          <article class="card">
+            <div class="card-label" data-i18n="card.humidity">Humidity</div>
+            <div class="card-value"><span id="hum">—</span><span class="unit">%</span></div>
+            <div class="card-sub"><span data-i18n="card.threshold">threshold</span> <span id="humTh">—</span>%</div>
+          </article>
+          <article class="card">
+            <div class="card-label" data-i18n="card.heatIndex">Heat index</div>
+            <div class="card-value"><span id="heatIndex">—</span><span class="unit">°C</span></div>
+            <div class="card-sub"><span data-i18n="card.trend">trend</span> <span id="heatTrend">—</span></div>
+          </article>
+          <article class="card" id="flameCard">
+            <div class="card-label" data-i18n="card.flame">Flame / Fire</div>
+            <div class="card-value"><span id="flame" class="badge ok">—</span></div>
+            <div class="card-sub" id="fireLatchText">—</div>
+          </article>
+          <article class="card" id="doorCard">
+            <div class="card-label" data-i18n="card.door">Door lock</div>
+            <div class="card-value"><span id="door" class="badge neutral">UNKNOWN</span></div>
+            <div class="card-sub"><span data-i18n="card.updated">updated</span> <span id="doorAt">—</span></div>
+          </article>
+          <article class="card">
+            <div class="card-label" data-i18n="card.device">Device</div>
+            <div class="card-value"><span id="devOnline" class="badge neutral">—</span></div>
+            <div class="card-sub"><span data-i18n="card.lastSeen">last seen</span> <span id="devLastSeen">—</span></div>
+          </article>
+        </div>
+
+        <div class="grid-2">
+          <section class="panel">
+            <h3 data-i18n="panel.health">Device health</h3>
+            <dl class="kv">
+              <div><dt data-i18n="health.firmware">Firmware</dt><dd id="hFw">—</dd></div>
+              <div><dt data-i18n="health.uptime">Uptime</dt><dd id="hUptime">—</dd></div>
+              <div><dt data-i18n="health.rssi">Wi‑Fi RSSI</dt><dd id="hRssi">—</dd></div>
+              <div><dt data-i18n="health.heap">Free heap</dt><dd id="hHeap">—</dd></div>
+              <div><dt data-i18n="health.chipTemp">Chip temperature</dt><dd id="hChip">—</dd></div>
+              <div><dt data-i18n="health.resetReason">Last reset reason</dt><dd id="hReset">—</dd></div>
+            </dl>
+            <p id="healthNote" class="hint"></p>
+          </section>
+
+          <section class="panel">
+            <h3 data-i18n="panel.trend">Temperature history</h3>
+            <div class="chart-wrap">
+              <svg id="tempChart" class="chart" viewBox="0 0 320 120" role="img" aria-label="Temperature history"></svg>
+            </div>
+            <p id="chartNote" class="hint"></p>
+            <h3 class="mt" data-i18n="panel.controls">Controls</h3>
+            <div class="controls">
+              <button id="lockBtn" class="btn danger" type="button" data-i18n="door.lock">Lock door</button>
+              <button id="unlockBtn" class="btn success" type="button" data-i18n="door.unlock">Unlock door</button>
+              <button id="resetFireBtn2" class="btn warn" type="button" data-i18n="fire.reset">Reset fire</button>
+              <span id="cmdMsg" class="hint"></span>
+            </div>
+            <p id="doorSource" class="hint"></p>
+          </section>
+        </div>
+
+        <div class="grid-2">
+          <section class="panel">
+            <h3 data-i18n="panel.recentEvents">Recent events</h3>
+            <ul id="recentEvents" class="list"></ul>
+          </section>
+          <section class="panel">
+            <h3 data-i18n="panel.today">Today in this room</h3>
+            <ul id="recentTaps" class="list"></ul>
+          </section>
+        </div>
+      </section>
+
+      <!-- ============ Attendance ============ -->
+      <section id="view-attendance" class="view" hidden aria-labelledby="atTitle">
+        <div class="view-head">
+          <h2 id="atTitle" data-i18n="attendance.title">Attendance</h2>
+          <span id="attendanceCount" class="hint"></span>
+        </div>
+        <section class="panel">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th data-i18n="table.name">Name</th>
+                  <th data-i18n="table.role">Role</th>
+                  <th data-i18n="table.uid">Card UID</th>
+                  <th data-i18n="table.status">Status</th>
+                  <th data-i18n="table.date">Date</th>
+                  <th data-i18n="table.time">Time</th>
+                </tr>
+              </thead>
+              <tbody id="attendanceBody"></tbody>
+            </table>
+          </div>
+          <p id="attendanceEmpty" class="empty" data-i18n="empty.attendance" hidden>No attendance records yet.</p>
+        </section>
+      </section>
+
+      <!-- ============ Events ============ -->
+      <section id="view-events" class="view" hidden aria-labelledby="evTitle">
+        <div class="view-head">
+          <h2 id="evTitle" data-i18n="events.title">Event log</h2>
+          <label class="filter">
+            <span data-i18n="events.filter">Type</span>
+            <select id="eventTypeFilter">
+              <option value="" data-i18n="events.all">All types</option>
+            </select>
+          </label>
+        </div>
+        <section class="panel">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th data-i18n="table.type">Type</th>
+                  <th data-i18n="table.detail">Detail</th>
+                  <th data-i18n="table.room">Room</th>
+                  <th data-i18n="table.sequence">Seq</th>
+                  <th data-i18n="table.time">Time</th>
+                </tr>
+              </thead>
+              <tbody id="eventsBody"></tbody>
+            </table>
+          </div>
+          <p id="eventsEmpty" class="empty" data-i18n="empty.events" hidden>No events recorded yet.</p>
+        </section>
+      </section>
+
+      <!-- ============ Student ============ -->
+      <section id="view-student" class="view" hidden aria-labelledby="stTitle">
+        <div class="view-head">
+          <h2 id="stTitle" data-i18n="student.title">My attendance</h2>
+        </div>
+        <div class="grid-2">
+          <section class="panel">
+            <h3 data-i18n="student.today">Today</h3>
+            <div id="studentToday" class="big-state">—</div>
+            <p id="studentTodayMeta" class="hint"></p>
+          </section>
+          <section class="panel">
+            <h3 data-i18n="student.history">Recent days</h3>
+            <ul id="studentHistory" class="list"></ul>
+            <p id="studentEmpty" class="empty" data-i18n="empty.attendance" hidden>No attendance records yet.</p>
+          </section>
+        </div>
+      </section>
+
+      <!-- ============ Guardian ============ -->
+      <section id="view-guardian" class="view" hidden aria-labelledby="guTitle">
+        <div class="view-head">
+          <h2 id="guTitle" data-i18n="guardian.title">My children</h2>
+        </div>
+        <div id="guardianChildren" class="grid-2"></div>
+        <p id="guardianEmpty" class="empty" data-i18n="guardian.none" hidden>No children are linked to this account yet.</p>
+      </section>
+
+      <!-- ============ Admin ============ -->
+      <section id="view-admin" class="view" hidden aria-labelledby="adTitle">
+        <div class="view-head">
+          <h2 id="adTitle" data-i18n="admin.title">Administration</h2>
+        </div>
+        <nav class="subtabs" id="adminSubtabs" aria-label="Administration sections">
+          <button class="subtab active" type="button" data-admin="rooms" data-i18n="admin.rooms">Rooms</button>
+          <button class="subtab" type="button" data-admin="devices" data-i18n="admin.devices">Devices</button>
+          <button class="subtab" type="button" data-admin="users" data-i18n="admin.users">Users</button>
+          <button class="subtab" type="button" data-admin="cards" data-i18n="admin.cards">Cards</button>
+          <button class="subtab" type="button" data-admin="schedules" data-i18n="admin.schedules">Schedules</button>
+          <button class="subtab" type="button" data-admin="settings" data-i18n="admin.settings">Settings</button>
+          <button class="subtab" type="button" data-admin="logins" data-i18n="admin.logins">Login history</button>
+          <button class="subtab" type="button" data-admin="notifications" data-i18n="admin.notifications">Notifications</button>
+        </nav>
+
+        <section class="admin-pane" id="admin-rooms">
+          <div class="grid-2">
+            <div class="panel">
+              <h3 data-i18n="admin.roomsList">Rooms</h3>
+              <ul id="adminRoomList" class="list"></ul>
+              <form id="roomForm" class="inline-form">
+                <input name="roomId" placeholder="ROOM-2" data-i18n-placeholder="admin.roomId" required />
+                <input name="name" placeholder="Room name" data-i18n-placeholder="admin.roomName" />
+                <button class="btn primary" type="submit" data-i18n="admin.addRoom">Add room</button>
+              </form>
+            </div>
+            <div class="panel">
+              <h3 data-i18n="admin.assignments">Assignments</h3>
+              <label class="field">
+                <span data-i18n="admin.room">Room</span>
+                <select id="assignRoomSelect"></select>
+              </label>
+              <ul id="assignmentList" class="list"></ul>
+              <form id="assignmentForm" class="inline-form">
+                <select id="assignUserSelect" required></select>
+                <select id="assignRoleSelect">
+                  <option value="teacher">teacher</option>
+                  <option value="student">student</option>
+                  <option value="guardian">guardian</option>
+                </select>
+                <button class="btn primary" type="submit" data-i18n="admin.assign">Assign</button>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <section class="admin-pane" id="admin-devices" hidden>
+          <section class="panel">
+            <h3 data-i18n="admin.deviceList">Registered devices</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th data-i18n="table.device">Device</th>
+                    <th data-i18n="table.room">Room</th>
+                    <th data-i18n="table.state">State</th>
+                    <th data-i18n="health.firmware">Firmware</th>
+                    <th data-i18n="table.lastSeen">Last seen</th>
+                    <th data-i18n="table.actions">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="adminDeviceBody"></tbody>
+              </table>
+            </div>
+            <form id="deviceForm" class="inline-form">
+              <input name="deviceId" placeholder="classroom-02" data-i18n-placeholder="admin.deviceId" required />
+              <input name="roomId" placeholder="ROOM-1" data-i18n-placeholder="admin.roomId" required />
+              <input name="name" placeholder="Display name" data-i18n-placeholder="admin.deviceName" />
+              <button class="btn primary" type="submit" data-i18n="admin.addDevice">Register device</button>
+            </form>
+            <p class="hint" data-i18n="admin.tokenHint">A device token is shown only once. Paste it into the device provisioning page.</p>
+          </section>
+        </section>
+
+        <section class="admin-pane" id="admin-users" hidden>
+          <div class="grid-2">
+            <div class="panel">
+              <h3 data-i18n="admin.userList">Accounts</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th data-i18n="table.name">Name</th>
+                      <th data-i18n="table.email">Email</th>
+                      <th data-i18n="table.role">Role</th>
+                      <th data-i18n="table.state">State</th>
+                      <th data-i18n="table.actions">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="adminUserBody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="panel">
+              <h3 data-i18n="admin.addUser">Add account</h3>
+              <form id="userForm" class="stack-form">
+                <label><span data-i18n="table.name">Name</span><input name="displayName" required /></label>
+                <label><span data-i18n="table.email">Email</span><input name="email" type="email" required /></label>
+                <label><span data-i18n="login.password">Password</span><input name="password" type="password" minlength="8" required /></label>
+                <label><span data-i18n="table.role">Role</span>
+                  <select name="role" required>
+                    <option value="teacher">teacher</option>
+                    <option value="student">student</option>
+                    <option value="guardian">guardian</option>
+                    <option value="admin">admin</option>
+                  </select>
+                </label>
+                <label><span data-i18n="admin.classLabel">Class label</span><input name="classLabel" /></label>
+                <button class="btn primary" type="submit" data-i18n="admin.createUser">Create account</button>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <section class="admin-pane" id="admin-cards" hidden>
+          <div class="grid-2">
+            <div class="panel">
+              <h3 data-i18n="admin.cardList">RFID cards</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th data-i18n="table.uid">Card UID</th>
+                      <th data-i18n="table.role">Role</th>
+                      <th data-i18n="table.owner">Owner</th>
+                      <th data-i18n="table.state">State</th>
+                      <th data-i18n="table.actions">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="adminCardBody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="panel">
+              <h3 data-i18n="admin.addCard">Register card</h3>
+              <form id="cardForm" class="stack-form">
+                <label><span data-i18n="table.uid">Card UID</span><input name="uid" required maxlength="32" placeholder="A1B2C3D4" /></label>
+                <label><span data-i18n="table.role">Role</span>
+                  <select name="role">
+                    <option value="student">student</option>
+                    <option value="teacher">teacher</option>
+                    <option value="staff">staff</option>
+                  </select>
+                </label>
+                <label><span data-i18n="table.owner">Owner</span><select name="userId" id="cardOwnerSelect"></select></label>
+                <label><span data-i18n="admin.label">Label</span><input name="label" /></label>
+                <button class="btn primary" type="submit" data-i18n="admin.addCard">Register card</button>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <section class="admin-pane" id="admin-schedules" hidden>
+          <div class="grid-2">
+            <div class="panel">
+              <h3 data-i18n="admin.scheduleList">Class schedule</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th data-i18n="table.day">Day</th>
+                      <th data-i18n="table.time">Time</th>
+                      <th data-i18n="table.room">Room</th>
+                      <th data-i18n="table.subject">Subject</th>
+                      <th data-i18n="table.teacher">Teacher</th>
+                      <th data-i18n="table.actions">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="adminScheduleBody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="panel">
+              <h3 data-i18n="admin.addSchedule">Add class</h3>
+              <form id="scheduleForm" class="stack-form">
+                <label><span data-i18n="admin.room">Room</span><select name="roomId" id="scheduleRoomSelect" required></select></label>
+                <label><span data-i18n="table.teacher">Teacher</span><select name="teacherId" id="scheduleTeacherSelect"></select></label>
+                <label><span data-i18n="table.subject">Subject</span><input name="subject" /></label>
+                <label><span data-i18n="table.day">Day</span>
+                  <select name="dayOfWeek" required>
+                    <option value="1">Monday</option><option value="2">Tuesday</option>
+                    <option value="3">Wednesday</option><option value="4">Thursday</option>
+                    <option value="5">Friday</option><option value="6">Saturday</option>
+                    <option value="7">Sunday</option>
+                  </select>
+                </label>
+                <label><span data-i18n="admin.startTime">Start (HH:MM)</span><input name="startTime" pattern="\d{2}:\d{2}" placeholder="09:00" required /></label>
+                <label><span data-i18n="admin.endTime">End (HH:MM)</span><input name="endTime" pattern="\d{2}:\d{2}" placeholder="09:45" required /></label>
+                <button class="btn primary" type="submit" data-i18n="admin.addSchedule">Add class</button>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <section class="admin-pane" id="admin-settings" hidden>
+          <section class="panel">
+            <h3 data-i18n="admin.settings">Runtime settings</h3>
+            <form id="settingsForm" class="settings-grid"></form>
+            <div class="controls">
+              <button id="settingsSave" class="btn primary" type="button" data-i18n="admin.saveSettings">Save settings</button>
+              <span id="settingsMsg" class="hint"></span>
+            </div>
+          </section>
+        </section>
+
+        <section class="admin-pane" id="admin-logins" hidden>
+          <section class="panel">
+            <h3 data-i18n="admin.logins">Login history</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th data-i18n="table.email">Email</th>
+                    <th data-i18n="table.result">Result</th>
+                    <th data-i18n="table.reason">Reason</th>
+                    <th data-i18n="table.ip">IP</th>
+                    <th data-i18n="table.time">Time</th>
+                  </tr>
+                </thead>
+                <tbody id="adminLoginBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="admin-pane" id="admin-notifications" hidden>
+          <div class="grid-2">
+            <section class="panel">
+              <h3 data-i18n="admin.provider">Notification provider</h3>
+              <dl class="kv">
+                <div><dt data-i18n="notify.provider">Provider</dt><dd id="notifyProvider">—</dd></div>
+                <div><dt data-i18n="notify.configured">Configured</dt><dd id="notifyConfigured">—</dd></div>
+              </dl>
+              <p class="hint" data-i18n="notify.hint">When no provider is configured, alerts are logged as “skipped” and never marked delivered.</p>
+            </section>
+            <section class="panel">
+              <h3 data-i18n="admin.notifyLog">Recent alert deliveries</h3>
+              <ul id="notifyLog" class="list"></ul>
+            </section>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>FastRobox Smart Classroom</span> · <span data-i18n="footer.team">Team Forever_Knights</span> ·
+      <span data-i18n="footer.tz">Times shown in Asia/Dhaka</span>
+    </footer>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <dialog id="secretDialog" class="secret-dialog">
+    <h3 id="secretTitle" data-i18n="secret.title">Device token</h3>
+    <p class="hint" data-i18n="secret.hint">This value is shown once. Store it securely and enter it on the device.</p>
+    <textarea id="secretValue" rows="3" readonly></textarea>
+    <div class="controls">
+      <button id="secretClose" class="btn primary" type="button" data-i18n="common.close">Close</button>
+    </div>
+  </dialog>
+
+  <script src="/app.js" defer></script>
 </body>
 </html>

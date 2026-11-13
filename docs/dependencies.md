@@ -16,6 +16,13 @@ compliance tools; they use Node.js built-ins only.
 | dotenv | `^16.4.5` / 16.6.1 | BSD-2-Clause | Loads local environment configuration; Render supplies environment variables directly. |
 | Express | `^4.19.2` / 4.22.3 | MIT | HTTP routing, JSON APIs, SSE responses and static dashboard hosting. |
 | pg | `^8.12.0` / 8.23.1 | MIT | PostgreSQL connections, parameterized queries and migrations. |
+| bcryptjs | `^2.4.3` / 2.4.3 | MIT | Password hashing for Level-4 accounts (pure JS, no native build). |
+
+Development/test only:
+
+| Name | Declared / installed | Licence | Why it is used |
+|---|---|---|---|
+| @electric-sql/pglite | `^0.2.17` / 0.2.17 | Apache-2.0 | In-process PostgreSQL (WASM) for the test suite and the local UI demo. Not used in production or during Render startup. |
 
 The device simulator and Git tools add no npm dependencies. They use standard
 Node.js modules and the built-in `fetch` implementation.
@@ -29,10 +36,13 @@ Node.js modules and the built-in `fetch` implementation.
 | MFRC522 | `^1.4.11` / 1.4.12 | Unlicense | RC522 RFID card/tag communication over SPI. |
 | ArduinoJson | `^7.2.0` / 7.4.3 | MIT | JSON telemetry, events, settings and command parsing. |
 | Adafruit NeoPixel | `^1.12.3` / 1.15.5 | LGPL-3.0 | Controls the onboard RGB LED for door and safety status. |
-| Arduino-ESP32 framework | Version supplied by the currently unpinned `espressif32` platform | LGPL-2.1 | Wi-Fi, HTTPS, WebServer, DNS, NVS Preferences, LittleFS, SPI and ESP32 board support. |
+| Arduino-ESP32 framework | platform `espressif32` 8.0.0 → framework 4.30312.261024 (ESP32-S3 libs 3.3.12) | LGPL-2.1 | Wi-Fi, HTTPS, WebServer, DNS, NVS Preferences, LittleFS, SPI and ESP32 board support. |
+| xtensa-esp-elf toolchain | 14.2.0+20260121 | GPL-3.0 with GCC runtime exception | Compiler/linker for the ESP32-S3. |
 
-The firmware platform is currently unpinned in `firmware/platformio.ini`; the
-exact resolved platform should be recorded before a reproducible contest build.
+The firmware platform is declared as unpinned `espressif32` in
+`firmware/platformio.ini`. The versions above are the exact resolved set used
+for the successful `pio run` / `buildfs` on 2026-11-13; pin
+`platform = espressif32@8.0.0` if a byte-reproducible contest build is required.
 
 ## Build and runtime platforms
 
@@ -49,6 +59,13 @@ exact resolved platform should be recorded before a reproducible contest build.
 | GitHub | Hosted service | GitHub hosted-service terms | Remote Git history, collaboration and judge read access. |
 | Render Web Service | Free plan | Render hosted-service terms | Public HTTPS deployment of the Express API and dashboard. |
 | Render PostgreSQL | Free plan | Render hosted-service terms; PostgreSQL engine under the PostgreSQL Licence | Managed database for the deployed backend. |
+| Telegram Bot API | Optional | Telegram terms | Optional safety-alert delivery (`NOTIFY_PROVIDER=telegram`). Not used unless a bot token and chat id are configured. |
+| Resend email API | Optional | Resend terms | Optional safety-alert email delivery (`NOTIFY_PROVIDER=email`). Not used unless an API key and sender/recipient are configured. |
+
+NTP is resolved at runtime from public servers (`pool.ntp.org`,
+`time.nist.gov`, `time.google.com`) with no account or key required. The device
+also validates the backend certificate against a public root CA (GTS Root R4),
+which is a public trust anchor, not a secret.
 
 No external face-recognition API, snapshot storage service or NTP service is in
 use yet. Any added later must be appended to this inventory with its purpose,

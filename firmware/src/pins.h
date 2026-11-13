@@ -13,8 +13,8 @@
 //   GPIO48 = onboard WS2812 RGB LED on many Freenove S3 boards (verify!)
 //   GPIO26..32 = flash/PSRAM (do NOT use)
 // The camera typically uses a block of GPIO1..18 — the RC522 SPI defaults below
-// may overlap those on some variants. Camera is NOT used in Phase 1, so remap
-// freely now and re-check when the camera is enabled in a later phase.
+// may overlap those on some variants. Camera is NOT used in Levels 1-4, so
+// remap freely now and re-check when the camera is enabled in a later phase.
 // ============================================================================
 
 // --- DHT11 temperature / humidity (single data pin) ---
@@ -40,6 +40,11 @@
 #define RGB_LED_COUNT      1
 
 // --- BOOT button (GPIO0 strapping pin; LOW while pressed) ---
-#define BOOT_PIN           0    // hold during reset to force provisioning AP
+#define BOOT_PIN           0    // hold at reset for setup AP; hold 5s at runtime to clear Wi-Fi
+
+// --- Panic touch pad (jumper wire on a capacitive-touch GPIO) ---
+// ESP32-S3 touch channels are GPIO1..GPIO14. GPIO4 is used by many S3 camera
+// headers — verify it does not clash with your camera/PSRAM wiring.
+#define PANIC_TOUCH_PIN    4    // TODO: verify touch-capable + free GPIO
 
 // Do not wire until every pin above is confirmed against your board variant.

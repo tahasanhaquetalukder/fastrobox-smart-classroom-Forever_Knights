@@ -3,5 +3,5 @@
 
 void statusPageBegin();
 void statusPageTick();
-void statusPageUpdate(float t, float h, bool flame);
-void statusPageSetLastRfid(const String& s);
+void statusPageEnd();
+void statusPageSetLastCard(const String& uid, const String& role);

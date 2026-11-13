@@ -21,10 +21,33 @@ services:
         fromDatabase:
           name: fastrobox-db
           property: connectionString
+      - key: DEVICE_BOOTSTRAP_ENABLED
+        value: "false"
       - key: DEVICE_TOKEN
         generateValue: true
       - key: ADMIN_TOKEN
         generateValue: true
+      - key: READ_TOKEN
+        generateValue: true
+      - key: LOGIN_MAX_FAILURES
+        value: "5"
+      - key: LOGIN_LOCK_MS
+        value: "30000"
+      - key: SESSION_TTL_HOURS
+        value: "12"
+      - key: BCRYPT_ROUNDS
+        value: "10"
+      - key: AUTH_FAILURE_LIMIT
+        value: "10"
+      - key: WRITE_LIMIT
+        value: "120"
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "60000"
+      # Safe default: alerts are recorded in notification_log but not sent.
+      # To enable delivery, set NOTIFY_PROVIDER plus provider credentials in
+      # the Render dashboard (never in git).
+      - key: NOTIFY_PROVIDER
+        value: "log"
       - key: DEFAULT_ROOM_ID
         sync: false
 

@@ -1,146 +1,181 @@
-# Architecture — AI-Powered Smart Classroom (Phase 1)
+# Architecture — Smart Classroom (Levels 1–4)
 
 ## Overview
 
 ```
-        ┌─────────────────────────────┐         HTTPS (REST)        ┌──────────────────────────┐
-        │   ESP32-S3-CAM device        │  ─────────────────────────▶ │  Node.js + Express API    │
-        │                              │   telemetry / events        │                          │
-        │  DHT11  flame  RC522         │  ◀───────────────────────── │  PostgreSQL              │
-        │  door state machine          │   commands / settings       │  readings/events/...     │
-        │  RGB LED + buzzer            │                             │                          │
-        │  local status page (:80)     │                             │  SSE  ──────────────┐    │
-        │  NVS config + LittleFS spool │                             │                     ▼    │
-        └─────────────────────────────┘                             │   Web dashboard (static) │
-                                                                     └──────────────────────────┘
+        ┌──────────────────────────────┐        HTTPS (CA-validated)      ┌───────────────────────────┐
+        │   ESP32-S3-CAM node          │  ──────────────────────────────▶ │  Node.js + Express API    │
+        │                              │   telemetry / events / boot      │                           │
+        │  FreeRTOS tasks (2 cores)    │  ◀────────────────────────────── │  PostgreSQL (Render/local)│
+        │  DHT11 · flame · RC522       │   commands / settings / acks     │  users · roles · history  │
+        │  panic pad · LED · buzzer    │                                  │                           │
+        │  local page :80 / mDNS       │                                  │  SSE ───────────────┐     │
+        │  NVS config + LittleFS spool │                                  │                     ▼     │
+        └──────────────────────────────┘                                  │  Web dashboard (static)   │
+                                                                          └───────────────────────────┘
 ```
 
-Three surfaces the judges check: **Serial Monitor**, the device **local status
-page**, and the **web dashboard** — plus the **RGB LED / buzzer** and the
-**database records**. All are fed from the same device state.
+Three surfaces are judged: **Serial Monitor**, the device **local status page**,
+and the **web dashboard** — plus the RGB LED/buzzer and the **database records**.
 
-## Components
-
-### Device (`/firmware`, PlatformIO + Arduino)
-Modular split so later levels slot in cleanly:
+## Firmware (`/firmware`, PlatformIO + Arduino)
 
 | Module | Responsibility |
 |--------|----------------|
-| `pins.h` | All GPIO definitions (placeholders to verify per board) |
-| `config.*` | NVS-backed runtime config; UID classification |
-| `provisioning.*` | AP mode + captive web page (first boot / BOOT held) |
-| `sensors.*` | DHT11, IR flame, RC522 (debounced UID reads) |
-| `door.*` | Simulated door state machine, RGB LED, buzzer (non-blocking) |
-| `net.*` | HTTPS telemetry/events, command polling, settings sync, offline spool |
-| `statuspage.*` | Local status web page on port 80 |
-| `main.cpp` | Orchestration + edge detection (flame, door) |
+| `main.cpp` | Task creation/pinning, watchdog, Serial commands, startup sequence |
+| `heartbeat.h` | Heartbeat counters shared with the watchdog |
+| `sensors.*` | DHT11 (5 s), flame (100 ms), RC522 (200 ms), fault detection, one event per tap |
+| `state.*` | Status hysteresis, quality, heat index, heat trend, fire latch, panic timing |
+| `alerts.*` | LED/buzzer priority state machine (strict priority) |
+| `door.*` | Simulated door; refuses to lock while fire is latched |
+| `touch.*` | Capacitive panic baseline calibration + 2 s hold detection |
+| `config.*` | NVS settings, setup password, persistent telemetry sequence, fire-state persistence |
+| `net.*` | HTTPS, NTP, telemetry/events/commands, spool, backoff, mDNS |
+| `provisioning.*` | WPA2 setup AP, captive DNS, Wi-Fi scan, save/wipe |
+| `statuspage.*` | Local JSON API + LittleFS assets (`data/www`) |
+| `sysinfo.*`, `version.h`, `trustca.h` | Reset reason, chip data, identity, public root CA |
 
-### Backend (`/backend`, Express + `pg`)
-- `src/server.js` — app wiring, `/health`, static dashboard.
-- `src/routes/*` — REST endpoints (see below).
-- `src/services/*` — `eventBus` (SSE fan-out), `settingsService`, `commandService`.
-- `src/middleware/*` — `deviceAuth`, optional `adminAuth`, error handling.
-- `src/db/*` — migration runner, `001_init.sql`, device seed script.
-- `src/features/` — **extension point** for later phases (vision, OTA, levels).
+### Task model
 
-### Dashboard (`/backend/public`, vanilla JS)
-Same-origin static files. Initial REST fetch + `EventSource('/api/stream')` for
-live updates. Remote lock/unlock and a runtime settings form.
+| Task | Core | Period | Watchdog limit |
+|------|------|--------|----------------|
+| sensor | 1 | 100 ms (DHT every 5 s) | 9 s |
+| rfid | 0 | 200 ms | 9 s |
+| net | 0 | event-driven + 5 s telemetry | 20 s (TLS can be slow) |
+| web | 0 | 2 s loop, serves clients | 9 s |
+| alert | 1 | 20 ms | 9 s |
+| serial | 1 | 10 ms | 8.5 s (`hang` guarantees <10 s restart) |
+| touch | 1 | 50 ms | 9 s |
+| watch | 1 | 1 s | — |
 
-## Data flow
+### Safety state machine
 
-- **Telemetry** (periodic): device `POST /api/device/telemetry` → `sensor_readings`
-  → SSE `reading` → dashboard cards.
-- **Events** (edge-triggered): device `POST /api/device/events` → `events` → SSE
-  `event`. Accepted `rfid_scan` also writes `attendance`; `door_change` also
-  pushes SSE `door`.
-- **Commands** (remote): dashboard `POST /api/door` → `commands` row → device
-  `GET /api/device/commands` (marks delivered) → device acts → `POST .../ack`.
-- **Settings** (live): dashboard `PUT /api/settings` → `settings` table → SSE
-  `settings`; device also `GET /api/settings` every 30s to adopt judge changes.
+- Ambient status: `SAFE → WARNING → DANGER` with hysteresis
+  (`DANGER` exits at 38 °C, `WARNING` exits at ≤30 °C and ≤80 % RH).
+- 3 s stabilization for ambient changes; FIRE is immediate after 2 s of
+  continuous flame.
+- Invalid temperature/RH marks `quality=bad` and keeps the last valid status.
+- Heat index (Rothfusz) and a 10-sample `RISING/STABLE/FALLING` trend are
+  telemetry-only.
+- FIRE latch persists in NVS, keeps the door unlocked and survives reboot.
+- Panic is a local 10 s alert; the cloud is notified with `PANIC {active:true}`
+  and later `{active:false}`.
 
-## Door state machine (simulated)
+### Alert priority (higher overrides lower)
 
-`LOCKED ⇄ UNLOCKED`, no physical lock. Transitions:
-- Accepted RFID (student/teacher) → `UNLOCKED` + auto-lock timer.
-- Remote `lock`/`unlock` command.
-- Auto-lock after `door_auto_lock_ms` (runtime-configurable).
+`FIRE > PANIC > SENSOR_ERROR > CAMERA_FAULT > WEATHER_DANGER > HEAT_DANGER >
+WARNING > ACCESS_GRANTED > DENIED > WIFI_OFFLINE > SAFE`
 
-LED: red = locked, green = unlocked, blue = provisioning, yellow = connecting,
-flashing red/blue = flame alert, red flash = denied. Buzzer: short beep = unlock,
-long beep = denied, repeating alarm = flame. All non-blocking (`millis()`).
+FIRE is red 5 Hz + continuous buzzer (solid red/no sound when silenced); PANIC
+is red/blue + 100 ms buzzer for 10 s; ACCESS_GRANTED is solid green 5 s + one
+short beep; DENIED is 3 red flashes + two short beeps; SENSOR_ERROR magenta,
+CAMERA_FAULT cyan, WEATHER_DANGER purple with three beeps, Wi-Fi setup/offline
+blue, SAFE/WARNING 2 Hz.
 
-## Offline resilience
+## Backend (`/backend`, Express + `pg`)
 
-- Events are spooled to a bounded RAM ring (100) **and** persisted to LittleFS
-  (`/spool.jsonl`), so they survive **network loss and power loss**.
-- On reconnect, `netFlush()` batch-posts the spool to `/api/device/events`
-  (`{events:[...]}`) and clears it on success.
-- Telemetry is periodic (latest value wins); a Wi-Fi watchdog reconnects.
+- `src/server.js` — security headers, `/health`, rate limit, route wiring, static.
+- `src/routes/*` — auth, admin, dashboard, fire, device, legacy operator APIs.
+- `src/services/*` — `authService`, `telemetryService`, `eventService`,
+  `dashboardService`, `notificationService`, `commandService`, `settingsService`,
+  `deviceService`, `eventBus`.
+- `src/middleware/*` — `requireAuth`, `requireRole`, room scoping, device auth,
+  rate limiting, error handling.
+- `src/db/*` — transactional migration runner, six migrations, seeders.
 
-## Runtime configuration (never hard-coded)
+### Data flow
 
-| Layer | Store | Values |
-|-------|-------|--------|
-| Device | NVS (`Preferences`) | Wi-Fi, room id, server URL, token, thresholds, response limits, UIDs |
-| Backend | `settings` table | room id, thresholds, response limits (editable live) |
+- **Telemetry** → `POST /api/device/telemetry` → validate/normalise → unique
+  `(device_id, seq)` insert → device health upsert → room state upsert (with
+  fire/panic precedence) → SSE `reading` → optional FIRE/DANGER notification.
+- **Events** → `POST /api/device/events` (single or `{events:[...]}`) → per-event
+  dedupe/validation → `events` row → event-specific handling
+  (FIRE, FIRE_CLEARED, PANIC, CARD_TAP/attendance, DOOR_CHANGE, SENSOR_ERROR) →
+  SSE `event`.
+- **Commands** → dashboard/API → `commands` row → device poll → ack.
+- **Settings** → admin UI → `settings` → SSE; device pulls settings and applies
+  acked changes.
 
-Provisioning page writes NVS; backend settings sync pulls judge changes down to
-the device. Defaults are seeds, not fixed constants.
+## REST API (primary)
+
+| Method | Path | Access | Purpose |
+|--------|------|--------|---------|
+| GET | `/health` | public | service + DB health |
+| POST | `/api/auth/login` | public (rate-limited) | session token |
+| POST | `/api/auth/logout` | session | revoke session |
+| GET | `/api/auth/me` | session | identity + rooms |
+| GET | `/api/dashboard` | session | role-scoped summary |
+| GET | `/api/dashboard/events` | session | scoped event history |
+| POST | `/api/fire/reset` | admin/teacher (room-scoped) | authorized fire reset |
+| POST | `/api/fire/silence` | admin/teacher (room-scoped) | silence after flame gone |
+| GET | `/api/fire/state` | admin/teacher | room safety state |
+| GET/POST/PATCH/DELETE | `/api/admin/*` | admin | rooms, devices, cards, users, schedules, login history |
+| POST | `/api/device/telemetry` | device token | periodic readings |
+| POST | `/api/device/events` | device token | events (single/batch) |
+| GET | `/api/device/commands` | device token | pending commands |
+| POST | `/api/device/commands/:id/ack` | device token | ack |
+| GET | `/api/settings` | session / legacy | settings |
+| PUT | `/api/settings` | admin | validated live edit |
+| GET | `/api/readings`, `/api/events`, `/api/attendance`, `/api/door` | session (legacy tokens allowed) | history / state |
+| POST | `/api/door` | admin/teacher | lock/unlock command |
+| GET | `/api/stream` | session header | SSE live feed |
+
+### SSE event types
+
+`hello`, `reading`, `event`, `door`, `attendance`, `settings`, `device`, `state`, `command`.
+
+## Database schema
+
+| Migration | Contents |
+|-----------|----------|
+| `001_init.sql` | devices, settings, sensor_readings, events, attendance, commands, firmware_versions |
+| `002_device_auth.sql` | token lifecycle + device health columns + unique token hash |
+| `003_identity.sql` | rooms, users, room_assignments, guardian_links, cards, attendance identity, sessions, login_history |
+| `004_telemetry.sql` | Level 3/4 reading columns, `UNIQUE (device_id, seq)`, history indexes, events envelope, room_state |
+| `005_ops.sql` | operations/audit support tables and indexes |
+| `006_schedules.sql` | class schedules |
+
+All migrations are additive and idempotent. The runner is transactional per
+file and records applied names in `schema_migrations`.
 
 ## Security model
 
-- **Device auth**: per-device token stored **hashed** (sha256) in `devices`, or
-  an optional env `DEVICE_TOKEN` bootstrap. Sent as `X-Device-Token`. Never in
-  source.
-- **Admin guard** (optional): `ADMIN_TOKEN` protects `PUT /api/settings` and
-  `POST /api/door`; dashboard sends `X-Admin-Token`. Disabled when unset (demo).
-- **Secrets**: only `.env.example` is committed; `.env` + firmware secrets are
-  gitignored. Render generates `DEVICE_TOKEN`/`ADMIN_TOKEN`.
-- **TLS tradeoff**: the device uses `WiFiClientSecure.setInsecure()` (accepts the
-  server cert without pinning) for demo simplicity. For production, pin the
-  Render/ISRG root CA via `setCACert()`. This is a deliberate, documented choice.
+- bcrypt password hashes with configurable rounds; per-account lockout
+  (`LOGIN_MAX_FAILURES`, `LOGIN_LOCK_MS`) checked **before** password comparison.
+- Random session tokens, stored as SHA-256 hashes, with TTL and logout deletion.
+- Server-side RBAC + room scoping on every protected route.
+- Device tokens are random and stored hashed; issue/rotate/revoke; revoked
+  devices rejected even with a valid old hash.
+- Login history and notification attempts are audited.
+- Rate limiting per IP; uniform auth failure messages; redacted logs.
+- HTTPS on device uses `setCACert()` (built-in public GTS Root R4 or NVS PEM).
+  `setInsecure()` is never used.
+- Security headers include CSP, frame denial, nosniff and a restrictive
+  permissions policy.
 
-## REST API
+## Notifications
 
-| Method | Path | Auth | Purpose |
-|--------|------|------|---------|
-| GET | `/health` | — | health + DB status |
-| POST | `/api/device/telemetry` | device | periodic readings |
-| POST | `/api/device/events` | device | event (single or batch) |
-| GET | `/api/device/commands` | device | poll pending commands |
-| POST | `/api/device/commands/:id/ack` | device | acknowledge command |
-| GET | `/api/settings` | — | read settings |
-| PUT | `/api/settings` | admin* | edit settings |
-| GET | `/api/readings` | — | recent readings |
-| GET | `/api/events` | — | recent events |
-| GET | `/api/attendance` | — | attendance list |
-| GET | `/api/door` | — | current door state |
-| POST | `/api/door` | admin* | remote lock/unlock → command |
-| GET | `/api/stream` | — | SSE live feed |
+`notificationService.js` supports `telegram`, `email` (Resend), generic
+`webhook`, and `log` (record only). FIRE, PANIC and HEAT_DANGER are attempted
+for the room's assigned teacher. Every attempt is written to `notification_log`
+with `sent`, `skipped` or `failed`. When a provider is not fully configured the
+service explicitly records `skipped` and never reports delivery.
 
-\* admin guard only when `ADMIN_TOKEN` is set.
+## Offline resilience
 
-### SSE event types
-`hello`, `reading`, `event`, `door`, `attendance`, `settings`, `command`.
+- Events spool in a bounded RAM queue and LittleFS (`/spool.jsonl`), surviving
+  network and power loss; flushed in order on reconnect.
+- Telemetry sequence is reserved in NVS ahead of use, so it is strictly
+  increasing across reboots; the backend rejects duplicates with 409.
+- Wi-Fi reconnect backoff 2 s → 60 s; unrecoverable authentication failure
+  returns to the setup portal.
 
-## Database schema (Phase 1)
+## Extension points (Levels 5–12, out of scope here)
 
-`devices`, `settings`, `sensor_readings`, `events`, `attendance`, `commands`,
-`firmware_versions` (OTA extension point), plus `schema_migrations`. See
-[`001_init.sql`](../backend/src/db/migrations/001_init.sql).
-
-## Extension points for later phases
-
-- **Camera snapshots / face recognition**: add a `vision` feature router under
-  `backend/src/features/`, a `snapshots` table via a new migration, and a camera
-  module in firmware (camera pins reserved in `pins.h`).
-- **OTA firmware history**: `firmware_versions` table already exists; add an
-  `ota` feature router + firmware update module.
-- **Level-specific features**: register routers in `features/index.js`; keep each
-  level modular. Tag completed levels `level-NN`.
+`backend/src/features/` remains the place for camera/vision/OTA routers; camera
+pins stay reserved. Nothing in Levels 5–12 is implemented.
 
 ## Scaling note
 
 `eventBus` is in-process (single instance). A multi-instance deployment would
-swap it for Redis pub/sub — the `publish()` interface stays the same.
+swap it for Redis pub/sub while keeping the `publish()` interface.

@@ -3,10 +3,12 @@
 #include <ArduinoJson.h>
 
 void netBegin();
-bool netOnline();
-void netSendTelemetry(float t, float h, bool flame, const char* doorState);
-void netSendEvent(const char* type, JsonDocument& payload);  // buffers if offline
-void netPollCommands();
-void netFetchSettings();
-void netFlush();
-void netTick(float t, float h, bool flame);
+void netLoop();                 // net task body
+bool netOnline();               // Wi-Fi + backend reachable
+bool netBackendOnline();
+bool netTimeReady();
+uint32_t netEpoch();
+void netQueueEvent(const char* type, const char* detail);
+void netQueueEvent(const char* type, const char* detail, JsonDocument& payload);
+bool netApplySettings(JsonObject settings);
+size_t netSpoolSize();

@@ -1,34 +1,33 @@
-// Register a device and issue its token. The token is stored HASHED; the
-// plaintext is printed once here so you can enter it on the device.
-//   npm run seed:device -- --device-id classroom-01 --room ROOM-1 [--token <t>]
-const crypto = require('crypto');
+// Issue a random per-device token. The plaintext is printed once for manual
+// provisioning; only its SHA-256 hash is stored.
+//   npm run seed:device -- --device-id classroom-01 --room ROOM-1 [--name NAME]
+// Running it again for an active device rotates its token.
 const db = require('../db');
 const config = require('../config');
+const devices = require('../services/deviceService');
 
-function arg(name, def) {
+function arg(name) {
   const i = process.argv.indexOf('--' + name);
-  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : def;
+  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1].trim() : '';
 }
 
 async function run() {
-  const deviceId = arg('device-id', 'classroom-01');
-  const room = arg('room', config.defaultRoomId);
-  let token = arg('token', '');
-  if (!token) token = crypto.randomBytes(24).toString('hex');
-  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const deviceId = arg('device-id');
+  const roomId = arg('room');
+  if (!deviceId || !roomId) throw new Error('--device-id and --room are required');
 
-  await db.query(
-    `INSERT INTO devices (device_id, name, room_id, token_hash)
-     VALUES ($1, $2, $3, $4)
-     ON CONFLICT (device_id)
-     DO UPDATE SET room_id = EXCLUDED.room_id, token_hash = EXCLUDED.token_hash`,
-    [deviceId, deviceId, room, tokenHash]
-  );
+  let result;
+  try {
+    result = await devices.createDevice({ deviceId, roomId, name: arg('name') });
+  } catch (err) {
+    if (err.status !== 409 || err.message !== 'device already exists') throw err;
+    result = await devices.rotateDeviceToken(deviceId);
+  }
 
   console.log('Device registered:');
-  console.log('  device_id:', deviceId);
-  console.log('  room_id  :', room);
-  console.log('  token    :', token);
+  console.log('  device_id:', result.device.device_id);
+  console.log('  room_id  :', result.device.room_id);
+  console.log('  token    :', result.token);
   console.log('Enter this token on the device provisioning page.');
   console.log('It is stored hashed; this is the only time the plaintext is shown.');
 }
