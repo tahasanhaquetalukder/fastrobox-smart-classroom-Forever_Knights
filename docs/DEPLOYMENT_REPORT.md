@@ -19,6 +19,7 @@ not be verified with available access are marked explicitly.
 | Author | `tahasanhaquetalukder <tahasan5800p@gmail.com>` (existing repo identity, one-off `-c` override; local Git config unchanged) |
 | Changes | 85 files, +10,020 / −1,217 |
 | Push | `86df0ac..ce074df  main -> main` (plain push, no force, no history rewrite) |
+| Follow-up | `bd628d3` — `docs: record Level 1-4 commit, push and Render deployment results`; runtime code unchanged; pushed, remote `main` = `bd628d3cbd23424bee8a6e7ce15c5358d51e5987` |
 
 GitHub verification:
 
@@ -121,6 +122,17 @@ option; the served `app.js` contains `loginForm`, `canControl`,
 - **Judge account login on Render** — the Render environment's judge e-mail/
   password variables and seeded accounts are owner-managed; no credentials were
   available. No login was attempted with guessed passwords (would risk lockout).
+  A sign-in attempt on the deployed page returned
+  `Invalid credentials or the account is temporarily locked.` This is the
+  backend's single generic 401 message; it is returned for an unknown account, a
+  wrong password, or an active lockout, so it does not indicate which one
+  occurred.
+- **Cause of the failed sign-in (most likely):** Render's `startCommand` is
+  `npm run migrate && npm start`. `npm run seed:users` is **not** part of it and
+  no password variables are defined in `render.yaml`, so the Render database
+  contains only the tables — the judge accounts were never created there. The
+  e-mail default `admin@smartclass.local` is the only part that exists in the
+  repository; passwords are never stored or defaulted in code.
 - **Notification delivery** — `NOTIFY_PROVIDER=log`; no Telegram/Resend/webhook
   credentials are configured, so delivery is not claimed.
 - **Physical hardware** — no ESP32-S3, sensors, RFID reader, LED, buzzer or
@@ -130,13 +142,40 @@ option; the served `app.js` contains `loginForm`, `canControl`,
 ## 7. Owner next steps
 
 1. Open the Render dashboard for `fastrobox-smart-classroom`, confirm the live
-   deploy corresponds to commit `ce074df` and check the deploy log for
-   migration errors.
-2. Set the judge variables (`ADMIN_PASSWORD`, `TEACHER_PASSWORD`,
-   `STUDENT1_PASSWORD`, `STUDENT2_PASSWORD`, `GUARDIAN_PASSWORD`, plus e-mails
-   and card UIDs if desired) in Render, then run `npm run seed:users` once
-   against the Render `DATABASE_URL`.
-3. Optionally configure `NOTIFY_PROVIDER` and provider credentials, then test a
+   deploy corresponds to commit `bd628d3` (runtime identical to `ce074df`) and
+   check the deploy log for migration errors.
+2. Create the judge accounts. Pick one path:
+   - **From this machine (no Render Shell needed).** In Render open the
+     PostgreSQL instance → *Connect* → copy the **External Database URL**.
+     Migrations have already run there, so only seeding is needed:
+     ```bash
+     cd "D:/Hackathon Tahasan/fastrobox-smart-classroom-Forever_Knights/backend"
+     DATABASE_URL="<external-database-url>" DATABASE_SSL=true \
+     ADMIN_PASSWORD="<strong-password>" \
+     TEACHER_PASSWORD="<strong-password>" \
+     STUDENT1_PASSWORD="<strong-password>" \
+     STUDENT2_PASSWORD="<strong-password>" \
+     GUARDIAN_PASSWORD="<strong-password>" \
+     npm run seed:users
+     ```
+     The external URL contains the database password — do not commit or paste it
+     into chat. Seeding is idempotent: an e-mail that already exists keeps its
+     current password and is reported as `(existing, password unchanged)`.
+     Any password variable you leave out is generated once and printed to the
+     console; capture it immediately.
+   - **From the Render Shell**, if the instance offers one: set the password
+     variables in the service environment, redeploy, then run
+     `npm run seed:users` — or temporarily use
+     `npm run migrate && npm run seed:users && npm start` for one deploy and
+     revert afterwards (generated passwords would then appear in the deploy log).
+3. If accounts already exist with unknown passwords, log in as an admin (needs
+   valid admin credentials) and call
+   `PATCH /api/admin/users/<id>` with `{"password":"..."}`; changing a password
+   also deletes that user's sessions.
+4. Note the lockout: 5 wrong passwords lock an account for 30 s; a correct
+   password does not bypass an active lock. Wait 30 s before retrying a real
+   password, and avoid repeated guesses.
+5. Optionally configure `NOTIFY_PROVIDER` and provider credentials, then test a
    FIRE/PANIC notification.
-4. Run the physical tests listed in `docs/LEVEL_1_TO_4_COMPLETION_REPORT.md`
+6. Run the physical tests listed in `docs/LEVEL_1_TO_4_COMPLETION_REPORT.md`
    §12 and record the results.
