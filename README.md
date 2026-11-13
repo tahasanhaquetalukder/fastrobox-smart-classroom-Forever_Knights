@@ -36,7 +36,7 @@ pins).
 ```
 firmware/   PlatformIO + Arduino project for ESP32-S3-CAM
 backend/    Express REST API + SSE, PostgreSQL migrations, dashboard (public/)
-tools/      Device simulator (test the platform without hardware)
+tools/      Device simulator and Git compliance/contest tools
 docs/       architecture notes, pin map, level notes
 README.md  .gitignore  .env.example  render.yaml
 ```
@@ -179,7 +179,31 @@ check.
 - The device uses HTTPS to the backend. For the demo it accepts the server cert
   without pinning (`setInsecure()`); see `docs/architecture.md` for the tradeoff.
 
-## Roadmap / levels
+## Repository compliance
+
+Install the optional local Git hooks and run the full repository check:
+
+```bash
+node tools/install-hooks.js
+node tools/git-compliance-check
+```
+
+The tools scan for secrets and forbidden artifacts without printing suspected
+values. Evaluation-tag commands and judge-access steps are in
+[`docs/runbook.md`](docs/runbook.md); every direct library and hosted service
+is listed in [`docs/dependencies.md`](docs/dependencies.md).
+
+## Levels
+
+No contest level tags have been created yet. During the contest, each level
+gets a `docs/levels/level-NN.md` write-up and an exact `level-NN` Git tag.
+
+### Per-level changelog
+
+- No evaluated levels yet. From `level-02` onward, add the new entry before
+  creating its tag; the tag helper enforces this reminder.
+
+## Development roadmap
 
 Phase 1 = foundation (this commit set). Later: camera snapshot upload, face
 recognition, OTA firmware updates with history, and level-specific features.
