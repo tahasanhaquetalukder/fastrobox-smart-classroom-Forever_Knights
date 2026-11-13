@@ -1,0 +1,3 @@
+#!/bin/sh
+ROOT=$(git rev-parse --show-toplevel) || exit 1
+node "$ROOT/tools/rules-guard.js" --commit-message "$1"

@@ -1,0 +1,7 @@
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS token_issued_at TIMESTAMPTZ;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS token_rotated_at TIMESTAMPTZ;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_devices_token_hash
+  ON devices (token_hash)
+  WHERE token_hash IS NOT NULL;
