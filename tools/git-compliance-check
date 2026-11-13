@@ -1,0 +1,115 @@
+#!/usr/bin/env node
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const { spawnSync } = require('child_process');
+const { forbiddenPath, scanHistory, scanTree } = require('./rules-guard.js');
+
+const ROOT = path.resolve(__dirname, '..');
+const ALLOWED_SPECIAL_TAGS = new Set(['contest-start', 'pre-contest-final']);
+let failures = 0;
+
+function git(args) {
+  const result = spawnSync('git', args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+  if (result.status !== 0) throw new Error(`git ${args[0]} failed`);
+  return result.stdout;
+}
+
+function lines(text) {
+  return text.split(/\r?\n/).filter(Boolean);
+}
+
+function check(name, fn) {
+  try {
+    const detail = fn();
+    console.log(`[compliance] PASS ${name}${detail ? `: ${detail}` : ''}`);
+  } catch (error) {
+    failures++;
+    console.error(`[compliance] FAIL ${name}: ${error.message}`);
+  }
+}
+
+function assertFindings(result) {
+  if (!result.findings.length) return;
+  for (const finding of result.findings.slice(0, 20)) {
+    console.error(`[compliance] finding ${finding.rule} ${finding.source}`);
+  }
+  throw new Error(`${result.findings.length} finding(s); values intentionally hidden`);
+}
+
+check('origin remote', () => {
+  if (!lines(git(['remote'])).includes('origin')) throw new Error('origin is not configured');
+  return 'origin is configured';
+});
+
+check('main branch', () => {
+  const branch = git(['branch', '--show-current']).trim();
+  if (branch !== 'main') throw new Error('current branch is not main');
+  return 'on main';
+});
+
+check('clean worktree', () => {
+  if (git(['status', '--porcelain']).trim()) throw new Error('commit or remove all changes first');
+  return 'no uncommitted files';
+});
+
+check('tracked files', () => {
+  const tracked = lines(git(['ls-files']));
+  const forbidden = tracked.map((file) => ({ file, rule: forbiddenPath(file) })).filter((item) => item.rule);
+  const ignored = lines(git(['ls-files', '-ci', '--exclude-standard']));
+  for (const item of [...forbidden, ...ignored.map((file) => ({ file, rule: 'tracked-but-ignored' }))].slice(0, 20)) {
+    console.error(`[compliance] finding ${item.rule} ${item.file}`);
+  }
+  if (forbidden.length || ignored.length) throw new Error(`${forbidden.length + ignored.length} forbidden tracked path(s)`);
+  return `${tracked.length} paths allowed`;
+});
+
+check('staged tree secrets', () => {
+  const result = scanTree(true);
+  assertFindings(result);
+  return `${result.scanned} text files scanned`;
+});
+
+check('full history secrets', () => {
+  const result = scanHistory();
+  assertFindings(result);
+  return `${result.scanned} blobs and ${result.commits} messages scanned`;
+});
+
+check('author identity', () => {
+  const identities = new Set(lines(git(['log', '--all', '--format=%an%x09%ae'])));
+  if (identities.size !== 1) throw new Error(`${identities.size} distinct identities found`);
+  return 'one consistent identity';
+});
+
+check('commit trailers', () => {
+  const messages = git(['log', '--all', '--format=%B']);
+  const matches = messages.match(/^\s*(?:Co-authored-by|Generated-with|AI-Assisted-by)\s*:/gim) || [];
+  if (matches.length) throw new Error(`${matches.length} prohibited trailer(s)`);
+  return 'no prohibited AI trailers';
+});
+
+let latestLevel = null;
+check('tag names', () => {
+  const tags = lines(git(['tag', '-l']));
+  const invalid = tags.filter((tag) => !/^level-\d{2}$/.test(tag) && !ALLOWED_SPECIAL_TAGS.has(tag));
+  if (invalid.length) throw new Error(`invalid tag name(s): ${invalid.join(', ')}`);
+  const levels = tags.map((tag) => /^level-(\d{2})$/.exec(tag)).filter(Boolean);
+  if (levels.length) latestLevel = `level-${levels.map((match) => match[1]).sort().at(-1)}`;
+  return `${tags.length} valid tag(s)`;
+});
+
+check('README latest level', () => {
+  if (!latestLevel) return 'no level tags yet';
+  const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+  if (!readme.includes(latestLevel)) throw new Error(`README does not mention ${latestLevel}`);
+  return `${latestLevel} documented`;
+});
+
+if (failures) {
+  console.error(`[compliance] FAILED ${failures} check(s)`);
+  process.exitCode = 1;
+} else {
+  console.log('[compliance] PASS all checks');
+}
